@@ -1,0 +1,75 @@
+name: CI
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python: ["3.10", "3.11", "3.12", "3.13"]
+        include:
+          - os: ubuntu-22.04
+            python: "3.9"
+          - os: macos-latest
+            python: "3.13"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install . pytest
+      - run: python -m pytest -q -rs
+
+  kind:
+    name: e2e on a real cluster (kind)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install .
+      - uses: helm/kind-action@v1
+      - name: deploy, edit the ConfigMap, catch the stale pods
+        run: |
+          set -x
+          kubectl create namespace shop
+          kubectl apply -f examples/kind/app.yaml
+          kubectl -n shop rollout status deploy/demo --timeout=180s
+          sleep 2
+          kubectl -n shop patch configmap demo-config --type merge -p '{"data":{"GREETING":"hello-v2"}}'
+          kubectl -n shop get pods,configmaps,secrets -o yaml --show-managed-fields > dump.yaml
+          set +e; confroll -n shop stale dump.yaml; rc=$?; set -e
+          test "$rc" -eq 1
+          confroll -n shop stale dump.yaml --format json | python -c 'import json,sys; r=json.load(sys.stdin)["stale"]; assert len(r)==2 and r[0]["owner"]=="Deployment/demo", r'
+          # the env really is stale inside the pod
+          pod=$(kubectl -n shop get pod -l app=demo -o jsonpath='{.items[0].metadata.name}')
+          kubectl -n shop exec "$pod" -- printenv GREETING | grep -x hello-v1
+      - name: static scan flags it, stamp fixes it
+        run: |
+          set -x
+          set +e; confroll scan examples/kind; rc=$?; set -e
+          test "$rc" -eq 1
+          sed -i 's/hello-v1/hello-v3/' examples/kind/app.yaml
+          confroll stamp examples/kind > stamped.yaml
+          confroll scan stamped.yaml
+          kubectl apply -f stamped.yaml
+          kubectl -n shop rollout status deploy/demo --timeout=180s
+          sleep 5
+          kubectl -n shop get pods,configmaps,secrets -o yaml --show-managed-fields | confroll -n shop stale -
+          pod=$(kubectl -n shop get pod -l app=demo --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}')
+          kubectl -n shop exec "$pod" -- printenv GREETING | grep -x hello-v3
+
+  install-script:
+    name: one-line install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: CONFROLL_REF=${{ github.sha }} sh install.sh
+      - run: |
+          export PATH="$HOME/.local/bin:${PIPX_BIN_DIR:-/opt/pipx_bin}:$PATH"
+          confroll --version
+          confroll scan examples/shop --fail-on none

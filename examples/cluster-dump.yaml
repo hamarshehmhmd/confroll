@@ -1,0 +1,94 @@
+# Shaped like: kubectl get pods,configmaps,secrets -n shop -o yaml --show-managed-fields
+apiVersion: v1
+kind: List
+items:
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: shop-config
+      namespace: shop
+      creationTimestamp: "2026-11-02T08:00:00Z"
+      managedFields:
+        - manager: kubectl-client-side-apply
+          operation: Update
+          time: "2026-11-02T08:00:00Z"
+          fieldsV1: {"f:data": {"f:DB_POOL_SIZE": {}}}
+        - manager: kubectl-edit
+          operation: Update
+          time: "2026-11-09T09:40:00Z"
+          fieldsV1: {"f:data": {"f:FEATURE_NEW_CHECKOUT": {}}}
+    data: {FEATURE_NEW_CHECKOUT: "true", DB_POOL_SIZE: "10"}
+  - apiVersion: v1
+    kind: Secret
+    metadata:
+      name: payments-api-key
+      namespace: shop
+      creationTimestamp: "2026-11-02T08:00:00Z"
+      managedFields:
+        - manager: kubectl-client-side-apply
+          operation: Update
+          time: "2026-11-02T08:00:00Z"
+          fieldsV1: {"f:data": {".": {}, "f:STRIPE_KEY": {}}}
+        - manager: kubectl-label
+          operation: Update
+          time: "2026-11-09T09:50:00Z"
+          fieldsV1: {"f:metadata": {"f:labels": {"f:team": {}}}}
+    data: {STRIPE_KEY: c2tfdGVzdF9uZXc=}
+  - apiVersion: v1
+    kind: Pod
+    metadata:
+      name: api-7d9f8c6b5-x2k4p
+      namespace: shop
+      labels: {app: api, pod-template-hash: 7d9f8c6b5}
+      ownerReferences: [{apiVersion: apps/v1, kind: ReplicaSet, name: api-7d9f8c6b5, controller: true}]
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/example/api:1.4.2
+          envFrom: [{configMapRef: {name: shop-config}}]
+          env:
+            - name: STRIPE_KEY
+              valueFrom: {secretKeyRef: {name: payments-api-key, key: STRIPE_KEY}}
+    status:
+      phase: Running
+      startTime: "2026-11-08T22:10:00Z"
+      containerStatuses:
+        - name: api
+          state: {running: {startedAt: "2026-11-08T22:10:05Z"}}
+  - apiVersion: v1
+    kind: Pod
+    metadata:
+      name: api-7d9f8c6b5-q8z7m
+      namespace: shop
+      labels: {app: api, pod-template-hash: 7d9f8c6b5}
+      ownerReferences: [{apiVersion: apps/v1, kind: ReplicaSet, name: api-7d9f8c6b5, controller: true}]
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/example/api:1.4.2
+          envFrom: [{configMapRef: {name: shop-config}}]
+    status:
+      phase: Running
+      startTime: "2026-11-09T09:45:00Z"
+      containerStatuses:
+        - name: api
+          state: {running: {startedAt: "2026-11-09T09:45:03Z"}}
+  - apiVersion: v1
+    kind: Pod
+    metadata:
+      name: edge-5b7c9d8f4-m3n2b
+      namespace: shop
+      labels: {app: edge, pod-template-hash: 5b7c9d8f4}
+      ownerReferences: [{apiVersion: apps/v1, kind: ReplicaSet, name: edge-5b7c9d8f4, controller: true}]
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27
+          volumeMounts: [{name: conf, mountPath: /etc/nginx/nginx.conf, subPath: nginx.conf}]
+      volumes: [{name: conf, configMap: {name: shop-config}}]
+    status:
+      phase: Running
+      startTime: "2026-11-07T12:00:00Z"
+      containerStatuses:
+        - name: nginx
+          state: {running: {startedAt: "2026-11-07T12:00:02Z"}}

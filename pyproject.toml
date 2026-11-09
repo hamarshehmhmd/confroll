@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "confroll"
+version = "0.1.0"
+description = "Find Kubernetes workloads that won't pick up ConfigMap/Secret changes, see what a config diff will really roll out, stamp config hashes, and list pods running stale config."
+readme = "README.md"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [{name = "Mohammad Hamarsheh"}]
+requires-python = ">=3.9"
+dependencies = ["PyYAML>=5.4"]
+keywords = ["kubernetes", "configmap", "secret", "rollout", "helm", "kustomize", "reloader", "devops", "ci"]
+classifiers = [
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Intended Audience :: System Administrators",
+  "Programming Language :: Python :: 3",
+  "Topic :: System :: Systems Administration",
+  "Topic :: Software Development :: Quality Assurance",
+]
+
+[project.urls]
+Homepage = "https://github.com/hamarshehmhmd/confroll"
+Issues = "https://github.com/hamarshehmhmd/confroll/issues"
+
+[project.scripts]
+confroll = "confroll.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

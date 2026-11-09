@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+spec:
+  replicas: 3
+  selector: {matchLabels: {app: api}}
+  template:
+    metadata: {labels: {app: api}}
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/example/api:1.4.2
+          envFrom:
+            - configMapRef: {name: shop-config}
+          env:
+            - name: STRIPE_KEY
+              valueFrom: {secretKeyRef: {name: payments-api-key, key: STRIPE_KEY}}
+          readinessProbe: {httpGet: {path: /healthz, port: 8080}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: edge}}
+  template:
+    metadata: {labels: {app: edge}}
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27
+          volumeMounts:
+            - {name: conf, mountPath: /etc/nginx/nginx.conf, subPath: nginx.conf}
+      volumes:
+        - name: conf
+          configMap: {name: shop-config}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: web}}
+  template:
+    metadata: {labels: {app: web}}
+    spec:
+      containers:
+        - name: web
+          image: ghcr.io/example/web:2.0.0
+          volumeMounts:
+            - {name: assets, mountPath: /srv/assets}
+          readinessProbe: {httpGet: {path: /, port: 80}}
+      volumes:
+        - name: assets
+          configMap: {name: web-assets}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payments
+  annotations:
+    secret.reloader.stakater.com/reload: payments-api-key
+spec:
+  replicas: 2
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: payments}}
+  template:
+    metadata: {labels: {app: payments}}
+    spec:
+      containers:
+        - name: payments
+          image: ghcr.io/example/payments:3.1.0
+          env:
+            - name: STRIPE_KEY
+              valueFrom: {secretKeyRef: {name: payments-api-key, key: STRIPE_KEY}}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nightly-report
+spec:
+  schedule: "0 3 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: report
+              image: ghcr.io/example/report:1.0.0
+              envFrom:
+                - configMapRef: {name: shop-config}
